@@ -1,0 +1,4 @@
+[submodule "cccapstone"]
+	path = cccapstone
+	url = https://github.com/zer0mem/cccapstone.git
+    branch = next
