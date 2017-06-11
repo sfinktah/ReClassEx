@@ -35,12 +35,7 @@
 
 #include <vector>
 
-//
-// BeaEngine disassembler 
-//
-#define BEA_ENGINE_STATIC
-#define BEA_USE_STDCALL
-#include "..\\beaengine\\beaengine\\headers\\BeaEngine.h"
+#include <cccapstone/cppbindings/X86Disasm.hh>
 
 //
 // Scintilla parser

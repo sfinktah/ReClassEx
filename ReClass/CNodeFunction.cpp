@@ -159,7 +159,7 @@ void CNodeFunction::DisassembleBytes( ULONG_PTR Address )
 {
 	ULONG_PTR StartAddress = Address;
 	UCHAR Code[2048] = { 0xCC }; // set max function size to 2048 bytes
-	UIntPtr EndCode = (UIntPtr)(Code + 2048);
+	//UIntPtr EndCode = (UIntPtr)(Code + 2048);
 	
 	// Clear old disassembly info
 	if (m_pEdit)
@@ -172,65 +172,76 @@ void CNodeFunction::DisassembleBytes( ULONG_PTR Address )
 	m_dwMemorySize = 0;
 	m_nLongestLine = 0;
 
+	std::size_t longest_ins = 0u;
+	std::size_t num_insn = 0u;
+
 	// Read in process bytes
 	if (ReClassReadMemory( (LPVOID)StartAddress, (LPVOID)Code, 2048 ) == TRUE)
 	{
-		DISASM MyDisasm;
-		BOOLEAN Error = FALSE;
+#ifdef _WIN64
+		CX86Disasm64 dis;
+#else
+		CX86Disasm86 dis;
+#endif
 
-		ZeroMemory( &MyDisasm, sizeof( DISASM ) );
-		MyDisasm.EIP = (UIntPtr)Code;
-		MyDisasm.VirtualAddr = (UInt64)StartAddress;
-		#ifdef _WIN64
-		MyDisasm.Archi = 64;
-		#else
-		MyDisasm.Archi = 0;
-		#endif
-		MyDisasm.Options = MasmSyntax | PrefixedNumeral | ShowSegmentRegs;
+		if (dis.GetError())
+			return;
 
-		// Get assembly lines
-		while (Error == FALSE)
-		{
-			int disasmLen = 0;
+		// set how deep should capstone reverse instruction
+		dis.SetDetail(cs_opt_value::CS_OPT_ON);
 
-			MyDisasm.SecurityBlock = (UInt32)(EndCode - MyDisasm.EIP);
+		// set syntax for output disasembly string
+		dis.SetSyntax(cs_opt_value::CS_OPT_SYNTAX_INTEL);
 
-			disasmLen = Disasm( &MyDisasm );
-			if (disasmLen == OUT_OF_BLOCK || disasmLen == UNKNOWN_OPCODE)
-			{
-				Error = TRUE;
+		auto insn = dis.Disasm(Code, 2048, StartAddress);
+
+		// check if disassembling succesfull
+		if (!insn)
+			return;
+
+		// preprocess disassembly
+		for (; num_insn < insn->Count && num_insn < 2048; ++num_insn) {
+
+			auto &ins = insn->Instructions(num_insn);
+
+			for (std::size_t j = 0; j < ins->size; ++j) {
+				if (ins->detail->groups[j] == cs_group_type::CS_GRP_INT) // int3 usually marks the end of a function
+					goto end;
 			}
-			else
-			{
-				CHAR szInstruction[256] = { 0 };
-				CHAR szBytes[128] = { 0 };
 
-				// INT3 instruction usually indicates the end of a function (obviously this is temporary)
-				if (MyDisasm.Instruction.Opcode == 0xCC)
-					break;
+			longest_ins = max(longest_ins, ins->size);
+			continue;
+		end:
+			break;
+		}
 
-				// Generate instruction bytes
-				for (int i = 0; i < disasmLen; i++)
-				{
-					sprintf_s( szBytes + (i * 3), 4, "%02X ", *(UCHAR*)(MyDisasm.EIP + i) );
-				}
+		longest_ins *= 3; // 3 characters per byte
 
-				// Create full instruction string
-				sprintf_s( szInstruction, 256, "%IX %-*s %s\r\n", (ULONG_PTR)MyDisasm.VirtualAddr, 20 /* change this l8r */, szBytes, MyDisasm.CompleteInstr );
-				m_Assembly.emplace_back( szInstruction );
+		// print disassembly
+		for (size_t i = 0; i < num_insn; i++) {
 
-				// Increment instruction length
-				m_dwMemorySize += disasmLen;
-				MyDisasm.EIP += disasmLen;
-				MyDisasm.VirtualAddr += disasmLen;
+			auto &ins = insn->Instructions(i);
 
-				if (MyDisasm.EIP >= EndCode)
-					break;
+			CHAR str_inst[256]{};
+			CHAR str_bytes[128]{};
+
+			for (std::size_t i = 0; i < ins->size; ++i) {
+				sprintf_s(str_bytes + (i * 3), 4, "%02X ", ins->bytes[i]);
 			}
+
+			int len = sprintf(str_inst, "%IX\t%-*s\t%s\t%s\r\n",
+				static_cast<unsigned int>(ins->address),
+				longest_ins,
+				str_bytes,
+				ins->mnemonic,
+				ins->op_str);
+
+			m_Assembly.emplace_back(str_inst);
+			m_dwMemorySize += ins->size;
 		}
 
 		// Get rid of new line on last assembly instruction
-		m_Assembly.back( ).Replace( "\r\n", "\0" );
+		m_Assembly.back().Replace( "\r\n", "\0" );
 	}
 	else
 	{
