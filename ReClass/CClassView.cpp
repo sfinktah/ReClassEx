@@ -201,6 +201,8 @@ void CClassView::OnTimer( UINT_PTR nIDEvent )
 
 void CClassView::OnKeyDown( UINT nChar, UINT nRepCnt, UINT nFlags )
 {
+    static std::vector<HOTSPOT>::iterator SelectionStart = m_Selected.begin( );
+    static std::vector<HOTSPOT>::iterator LastSelection = m_Selected.begin( );
     std::vector<HOTSPOT>::iterator FirstSelected;
     std::vector<HOTSPOT>::iterator Found;
     CNodePtr* PtrNode;
@@ -208,14 +210,48 @@ void CClassView::OnKeyDown( UINT nChar, UINT nRepCnt, UINT nFlags )
     CNodeBase* FindNode;
     ULONG_PTR FindAddress;
 
+	if (1 || !nFlags) {
+        if (nChar == 'Q') OnTypeQword();
+        else if (nChar == '4') OnTypeHex64();
+        else if (nChar == '3') OnTypeHex32();
+        else if (nChar == '2') OnTypeHex16();
+        else if (nChar == '1') OnTypeHex8();
+        //else if (nChar == 'Q') OnTypeBits();
+        //else if (nChar == 'Q') OnTypeInt64();
+        else if (nChar == 'I') OnTypeInt32();
+        //else if (nChar == 'Q') OnTypeInt16();
+        //else if (nChar == 'Q') OnTypeInt8();
+        else if (nChar == 'D') OnTypeDword();
+        else if (nChar == 'W') OnTypeWord();
+        else if (nChar == 'B') OnTypeByte();
+        //else if (nChar == 'Q') OnTypeVec2();
+        //else if (nChar == 'Q') OnTypeVec3();
+        //else if (nChar == 'Q') OnTypeQuat();
+        else if (nChar == 'M') OnTypeMatrix();
+        else if (nChar == 'F') OnTypeFloat();
+        //else if (nChar == 'Q') OnTypeDouble();
+        //else if (nChar == 'Q') OnTypeCustom();
+        //else if (nChar == 'Q') OnTypeUnicode(void);
+        else if (nChar == 'A') OnTypeText();
+        //else if (nChar == 'Q') OnTypePChar();
+        //else if (nChar == 'Q') OnTypePWChar();
+        //else if (nChar == 'Q') OnTypeVtable();
+        //else if (nChar == 'Q') OnTypeFunction();
+        //else if (nChar == 'Q') OnTypeFunctionPtr();
+        else if (nChar == 'P') OnTypePointer();
+        //else if (nChar == 'Q') OnTypeArray();
+        //else if (nChar == 'Q') OnTypePtrArray();
+        else if (nChar == 'C') OnTypeClass();
+	}
+
     if (nChar == VK_DOWN)
     {
-        FirstSelected = m_Selected.begin( );
-        if (FirstSelected != m_Selected.end( ))
+        LastSelection = m_Selected.begin( );
+        if (LastSelection != m_Selected.end( ))
         {
-            if (FirstSelected->Object->GetType( ) == nt_pointer)
+            if (LastSelection->Object->GetType( ) == nt_pointer)
             {
-                PtrNode = static_cast<CNodePtr*>(FirstSelected->Object);
+                PtrNode = static_cast<CNodePtr*>(LastSelection->Object);
                 FindNode = static_cast<CNodeBase*>(PtrNode->GetClass( ));
 
                 Found = std::find_if( m_Hotspots.begin( ), m_Hotspots.end( ),
@@ -228,9 +264,9 @@ void CClassView::OnKeyDown( UINT nChar, UINT nRepCnt, UINT nFlags )
                     m_Selected.push_back( *Found );
                 }
             }
-            else if (FirstSelected->Object->GetType( ) == nt_class)
+            else if (LastSelection->Object->GetType( ) == nt_class)
             {
-                ClassNode = static_cast<CNodeClass*>(FirstSelected->Object);
+                ClassNode = static_cast<CNodeClass*>(LastSelection->Object);
                 FindNode = static_cast<CNodeBase*>(ClassNode->GetNode( 0 ));
 
                 Found = std::find_if( m_Hotspots.begin( ), m_Hotspots.end( ),
@@ -244,9 +280,9 @@ void CClassView::OnKeyDown( UINT nChar, UINT nRepCnt, UINT nFlags )
             }
             else
             {
-                if (m_Hotspots[0].Object != FirstSelected->Object)
+                if (m_Hotspots[0].Object != LastSelection->Object)
                 {
-                    FindAddress = FirstSelected->Address + FirstSelected->Object->GetMemorySize( );
+                    FindAddress = LastSelection->Address + LastSelection->Object->GetMemorySize( );
 
                     Found = std::find_if( m_Hotspots.begin( ), m_Hotspots.end( ),
                         [FindAddress] ( const HOTSPOT hs ) { return (hs.Address == FindAddress); } );
@@ -264,7 +300,7 @@ void CClassView::OnKeyDown( UINT nChar, UINT nRepCnt, UINT nFlags )
                     }
                     //else // Not found
                     //{
-                    //  CNodeBase* selectedObject = FirstSelected->object;
+                    //  CNodeBase* selectedObject = LastSelection->object;
                     //  CNodeBase* selectedObjectParent = selectedObject->GetParent( );
                     //  if (selectedObjectParent->GetType( ) == nt_class)
                     //  {
@@ -282,11 +318,11 @@ void CClassView::OnKeyDown( UINT nChar, UINT nRepCnt, UINT nFlags )
     }
     else if (nChar == VK_UP)
     {
-        FirstSelected = m_Selected.begin( );
-        if (FirstSelected != m_Selected.end( ))
+        LastSelection = m_Selected.begin( );
+        if (LastSelection != m_Selected.end( ))
         {
-            if (FirstSelected->Address == (m_Hotspots[0].Address + m_Hotspots[0].Object->GetMemorySize( )) ||
-                FirstSelected->Object == m_Hotspots.begin( )->Object)
+            if (LastSelection->Address == (m_Hotspots[0].Address + m_Hotspots[0].Object->GetMemorySize( )) ||
+                LastSelection->Object == m_Hotspots.begin( )->Object)
             {
                 if (m_Scroll.IsWindowEnabled( ))
                 {
@@ -297,7 +333,7 @@ void CClassView::OnKeyDown( UINT nChar, UINT nRepCnt, UINT nFlags )
                 }
             }
 
-            FindAddress = FirstSelected->Address;
+            FindAddress = LastSelection->Address;
 
             Found = std::find_if( m_Hotspots.begin( ), m_Hotspots.end( ),
                 [FindAddress]( const HOTSPOT hs ) { return (hs.Address == FindAddress); } );
@@ -315,7 +351,7 @@ void CClassView::OnKeyDown( UINT nChar, UINT nRepCnt, UINT nFlags )
             //// Bring selected node into view
             //else
             //{
-            //  FirstSelected->Rect.top
+            //  LastSelection->Rect.top
             //}
 
             //
